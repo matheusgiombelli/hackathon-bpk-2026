@@ -1,0 +1,4 @@
+services:
+  db:
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"

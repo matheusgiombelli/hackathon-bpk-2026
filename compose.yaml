@@ -1,0 +1,46 @@
+name: nome_projeto
+
+services:
+  api:
+    container_name: projeto-api
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: python:3.14-slim
+
+    image: python:3.14-slim
+    restart: unless-stopped
+
+    environment:
+      APP_ENV: ${ENVIRONMENT}
+      APP_DEBUG: ${APP_DEBUG:-false}
+
+  db:
+    container_name: projeto-db
+    image: postgres:18-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+    networks:
+      - rede_projeto
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  rede_projeto:
+    driver: bridge
