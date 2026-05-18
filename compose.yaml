@@ -1,23 +1,37 @@
-name: nome_projeto
+name: ${PROJECT_SLUG}
 
 services:
   api:
-    container_name: projeto-api
     build:
       context: ./backend
       dockerfile: Dockerfile
-      args:
-        PYTHON_VERSION: python:3.14-slim
+      target: ${ENVIRONMENT}
 
-    image: python:3.14-slim
+    image: ${PROJECT_SLUG}-api:latest
     restart: unless-stopped
 
-    environment:
-      APP_ENV: ${ENVIRONMENT}
-      APP_DEBUG: ${APP_DEBUG:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+
+    networks:
+      - network
+
+    expose:
+      - "8000"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   db:
-    container_name: projeto-db
     image: postgres:18-alpine
     restart: unless-stopped
 
@@ -30,7 +44,7 @@ services:
       - postgres_data:/var/lib/postgresql
 
     networks:
-      - rede_projeto
+      - network
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -42,5 +56,6 @@ volumes:
   postgres_data:
 
 networks:
-  rede_projeto:
+  network:
+    name: rede-${PROJECT_SLUG}
     driver: bridge
