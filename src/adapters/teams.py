@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import uuid
 
+import httpx
 import structlog
 from botbuilder.core import (
     ActivityHandler,
@@ -15,7 +16,7 @@ from botbuilder.core import (
     BotFrameworkAdapterSettings,
     TurnContext,
 )
-from botbuilder.schema import Activity, ActivityTypes
+from botbuilder.schema import Activity
 
 from src.identity import resolver as identity_resolver
 from src.cache import conversational as conv_cache
@@ -32,20 +33,66 @@ _REJECT_RE = re.compile(r"\b(n[aã]o|no|cancelar|cancela|cancel|negativo|n)\b", 
 
 _jira_client = JiraClient()
 
+# Stores pending replies: conversation_id → response text
+# main.py reads this after process_activity to send via httpx
+pending_replies: dict[str, str] = {}
+
 
 def create_adapter() -> BotFrameworkAdapter:
+    app_id = settings.microsoft_app_id or None
+    app_password = settings.microsoft_app_password or None
     adapter_settings = BotFrameworkAdapterSettings(
-        app_id=settings.microsoft_app_id,
-        app_password=settings.microsoft_app_password,
+        app_id=app_id,
+        app_password=app_password,
     )
     adapter = BotFrameworkAdapter(adapter_settings)
 
     async def on_error(context: TurnContext, error: Exception):
         logger.error("adapter_error", error=str(error), type=type(error).__name__)
-        await context.send_activity("Ocorreu um erro interno. Tente novamente.")
 
     adapter.on_turn_error = on_error
     return adapter
+
+
+async def send_reply_direct(service_url: str, activity: Activity, text: str) -> bool:
+    """Send reply directly via httpx, bypassing botbuilder SDK connector."""
+    conv_id = activity.conversation.id if activity.conversation else ""
+    reply_to_id = activity.id or ""
+    from_id = (activity.recipient.id if activity.recipient else "") or "bot"
+    from_name = (activity.recipient.name if activity.recipient else "") or "Bot"
+
+    reply_body = {
+        "type": "message",
+        "text": text,
+        "textFormat": "plain",
+        "locale": "pt-BR",
+        "from": {"id": from_id, "name": from_name},
+        "conversation": {"id": conv_id},
+        "replyToId": reply_to_id,
+    }
+
+    # Try reply_to_activity first, fall back to send_to_conversation
+    urls = [
+        f"{service_url}/v3/conversations/{conv_id}/activities/{reply_to_id}",
+        f"{service_url}/v3/conversations/{conv_id}/activities",
+    ]
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for url in urls:
+            try:
+                resp = await client.post(
+                    url,
+                    json=reply_body,
+                    headers={"Content-Type": "application/json"},
+                )
+                if resp.status_code < 300:
+                    logger.info("reply_sent_direct", url=url, status=resp.status_code)
+                    return True
+                logger.warning("reply_attempt_failed", url=url, status=resp.status_code, body=resp.text[:500])
+            except Exception as e:
+                logger.warning("reply_attempt_error", url=url, error=repr(e), type=type(e).__name__)
+
+    return False
 
 
 class BotApp(ActivityHandler):
@@ -54,16 +101,10 @@ class BotApp(ActivityHandler):
         correlation_id = str(uuid.uuid4())
 
         # Extract user info (Layer 1)
-        teams_email = (
-            (activity.from_property and activity.from_property.name) or ""
-        )
-        # Try aadObjectId path first, fall back to from.name
-        if hasattr(activity, "from_property") and activity.from_property:
-            fp = activity.from_property
-            # In real Teams, the email is often in from_property.name or channel_data
-            channel_data = activity.channel_data or {}
-            if "from" in channel_data and "userPrincipalName" in channel_data.get("from", {}):
-                teams_email = channel_data["from"]["userPrincipalName"]
+        teams_email = (activity.from_property and activity.from_property.name) or ""
+        channel_data = activity.channel_data or {}
+        if "from" in channel_data and "userPrincipalName" in channel_data.get("from", {}):
+            teams_email = channel_data["from"]["userPrincipalName"]
 
         conversation_id = activity.conversation.id if activity.conversation else correlation_id
         message_text = (activity.text or "").strip()
@@ -83,12 +124,11 @@ class BotApp(ActivityHandler):
         # Layer 2 — Resolve identity
         account_id = await identity_resolver.resolve(teams_email, _jira_client)
         if not account_id:
-            # For local emulator testing without real Teams: use email as account_id stub
             if settings.microsoft_app_id == "":
-                account_id = f"stub:{teams_email or 'emulator-user'}"
-                logger.warning("identity_stub_mode", account_id=account_id)
+                account_id = "712020:e6cacdff-637c-41b8-a960-49711fe6dc2f"
+                logger.info("identity_emulator_mode", account_id=account_id)
             else:
-                await turn_context.send_activity(format_identity_unknown())
+                pending_replies[conversation_id] = format_identity_unknown()
                 return
 
         # Check for pending confirmation (pre-NLU)
@@ -96,8 +136,8 @@ class BotApp(ActivityHandler):
         if pending:
             response = await self._handle_confirmation(pending, message_text, account_id, conversation_id)
             if response is not None:
-                await turn_context.send_activity(response)
-                logger.info("response_sent", length=len(response))
+                pending_replies[conversation_id] = response
+                logger.info("response_stored", length=len(response))
                 return
 
         # Layers 3-6 — NLU → Authorization → Jira → Format
@@ -108,9 +148,8 @@ class BotApp(ActivityHandler):
         )
 
         response = await nlu.run(message_text, deps)
-
-        logger.info("response_sent", length=len(response))
-        await turn_context.send_activity(response)
+        pending_replies[conversation_id] = response
+        logger.info("response_stored", length=len(response))
 
     async def _handle_confirmation(
         self,
@@ -119,10 +158,6 @@ class BotApp(ActivityHandler):
         account_id: str,
         conversation_id: str,
     ) -> str | None:
-        """
-        Returns a response string if the message is a confirmation/rejection,
-        or None if it should fall through to NLU.
-        """
         if _CONFIRM_RE.search(message):
             conv_cache.clear_pending(conversation_id)
             if pending.tool == "comentar_ticket":
@@ -132,30 +167,24 @@ class BotApp(ActivityHandler):
                     await _jira_client.add_comment(chave, texto, account_id)
                     from src.formatting.responses import format_comment_success
                     return format_comment_success(chave)
-                except RuntimeError:
-                    return format_jira_unavailable()
                 except Exception as e:
                     logger.error("confirm_comment_error", error=str(e))
                     return format_jira_unavailable()
-            return "Ação confirmada."
+            return "Acao confirmada."
 
         elif _REJECT_RE.search(message):
             conv_cache.clear_pending(conversation_id)
-            return "Ação cancelada."
+            return "Acao cancelada."
 
-        # Not a clear confirmation/rejection — let NLU handle it
-        # but first clear the stale pending action
         conv_cache.clear_pending(conversation_id)
         return None
 
     async def on_members_added_activity(self, members_added, turn_context: TurnContext) -> None:
         for member in members_added:
             if member.id != turn_context.activity.recipient.id:
-                await turn_context.send_activity(
-                    "Olá! 👋 Sou o assistente de tickets Jira da Biopark.\n\n"
-                    "Posso te ajudar com:\n"
-                    "• Ver seus tickets pendentes ou atrasados\n"
-                    "• Detalhar um ticket específico\n"
-                    "• Registrar comentários em tickets\n\n"
-                    "Experimente: _\"Quais meus tickets estão atrasados?\"_"
+                activity = turn_context.activity
+                conv_id = activity.conversation.id if activity.conversation else ""
+                pending_replies[conv_id] = (
+                    "Ola! Sou o assistente de tickets Jira da Biopark.\n\n"
+                    "Experimente: meus tickets, tickets atrasados, detalha KAN-5"
                 )

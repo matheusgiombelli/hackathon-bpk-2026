@@ -1,0 +1,46 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "packageName": "com.biopark.jirabot",
+  "developer": {
+    "name": "Biopark Hackathon 2026",
+    "websiteUrl": "https://biopark.com.br",
+    "privacyUrl": "https://biopark.com.br",
+    "termsOfUseUrl": "https://biopark.com.br"
+  },
+  "icons": {
+    "color": "icon_color.png",
+    "outline": "icon_outline.png"
+  },
+  "name": {
+    "short": "Jira Bot",
+    "full": "Assistente Jira Biopark"
+  },
+  "description": {
+    "short": "Consulte tickets Jira pelo Teams",
+    "full": "Consulte e gerencie seus tickets Jira diretamente pelo Microsoft Teams em linguagem natural."
+  },
+  "accentColor": "#0078D4",
+  "bots": [
+    {
+      "botId": "COLOQUE_O_MICROSOFT_APP_ID_AQUI",
+      "scopes": ["personal"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            { "title": "meus tickets", "description": "Lista todos os seus tickets" },
+            { "title": "tickets atrasados", "description": "Mostra tickets com prazo vencido" },
+            { "title": "ajuda", "description": "Ver comandos disponíveis" }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}
