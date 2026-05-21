@@ -80,6 +80,31 @@ _PRIORITY_RE = re.compile(
     r'\b(?:mud[ae](?:r)?|altera(?:r)?|atualiza(?:r)?)\s+(?:a?\s*)?prioridade\s+(?:d[oa]\s+)?([A-Za-z]+-\d+)\s+(?:para\s+)?(.+)',
     re.IGNORECASE,
 )
+_COMMENTS_LIST_RE = re.compile(
+    r'\b(?:coment[aá]rios?|coments?)\s+(?:d[oa]\s+)?([A-Za-z]+-\d+)\b',
+    re.IGNORECASE,
+)
+_ASSIGN_ME_RE = re.compile(
+    r'\b(?:pega(?:r)?|assume?(?:r)?|me\s+atribu[ai](?:r)?|atribu[ai](?:r)?\s+(?:[ao]\s+)?(?:[A-Za-z]+-\d+)\s+(?:pra|para)\s+mim|atribu[ai](?:r)?\s+a\s+mim|fica\s+comigo)\s+(?:[ao]\s+)?([A-Za-z]+-\d+)(?:\s+(?:pra|para)\s+mim)?\b',
+    re.IGNORECASE,
+)
+_ASSIGN_ME_REVERSE_RE = re.compile(
+    r'\b(?:atribu[ai](?:r)?|passa(?:r)?|joga(?:r)?)\s+(?:[ao]\s+)?([A-Za-z]+-\d+)\s+(?:pra|para)\s+(?:mim|eu)\b',
+    re.IGNORECASE,
+)
+_SEARCH_RE = re.compile(
+    r'\b(?:busca(?:r)?|procura(?:r)?|pesquisa(?:r)?|search)\s+(?:por\s+)?(?:tickets?\s+(?:com\s+)?)?["\']?(.+?)["\']?\s*$',
+    re.IGNORECASE,
+)
+_REPORTER_RE = re.compile(
+    r'\b(?:tickets?|tarefas?|que)\s+(?:eu\s+)?(?:abri|reportei|criei|levantei)\b',
+    re.IGNORECASE,
+)
+_BUG_RE = re.compile(r'\b(?:meus?\s+)?bugs?\b', re.IGNORECASE)
+_STORY_RE = re.compile(r'\b(?:minhas?\s+)?(?:hist[oó]rias?|stor(?:y|ies))\b', re.IGNORECASE)
+_TASK_RE = re.compile(r'\b(?:minhas?\s+)?tarefas?\b', re.IGNORECASE)
+_URGENT_RE = re.compile(r'\b(urgentes?|cr[ií]tic[ao]s?|blockers?)\b', re.IGNORECASE)
+_HIGH_PRIO_RE = re.compile(r'\bprioridade\s+alta|\balta\s+prioridade\b', re.IGNORECASE)
 
 
 def _extract_project(text: str) -> Optional[str]:
@@ -101,11 +126,24 @@ async def run(user_message: str, deps: Deps) -> str:
         return (
             "Olá! Posso te ajudar com:\n"
             "• `meus tickets` — listar seus tickets\n"
-            "• `tickets atrasados` — ver o que está em atraso\n"
-            "• `tickets em andamento` — ver o que está sendo feito\n"
+            "• `tickets atrasados` / `urgentes` / `meus bugs` — filtros rápidos\n"
+            "• `tickets que abri` — tickets que você reportou\n"
             "• `detalha KAN-4` — ver detalhes de um ticket\n"
+            "• `comentários do KAN-4` — ver últimos comentários\n"
+            "• `busca login` — procurar tickets por texto\n"
+            "• `pega o KAN-4 pra mim` — atribuir a você\n"
             "• `comente no KAN-4: seu comentário` — adicionar comentário\n"
         )
+
+    # List comments intent (must come before generic comment regex)
+    comments_match = _COMMENTS_LIST_RE.search(msg)
+    if comments_match:
+        return await _handle_list_comments(comments_match.group(1).upper(), deps)
+
+    # Assign-to-me intent
+    assign_match = _ASSIGN_ME_RE.search(msg) or _ASSIGN_ME_REVERSE_RE.search(msg)
+    if assign_match:
+        return await _handle_assign_to_me(assign_match.group(1).upper(), deps)
 
     # Comment intent
     comment_match = _COMMENT_RE.search(msg)
@@ -174,6 +212,13 @@ async def run(user_message: str, deps: Deps) -> str:
     if keys and not _LIST_RE.search(msg):
         return await _handle_detail(keys[0], deps)
 
+    # Search by text intent (only if explicit "busca/procura" verb)
+    search_match = _SEARCH_RE.search(msg)
+    if search_match and not _LIST_RE.search(msg):
+        query = search_match.group(1).strip().strip('"\'')
+        if query and len(query) >= 2:
+            return await _handle_search(query, deps)
+
     # List intent
     atrasados = bool(_OVERDUE_RE.search(msg))
     status = None
@@ -184,22 +229,50 @@ async def run(user_message: str, deps: Deps) -> str:
     elif _DONE_RE.search(msg):
         status = 'concluido'
 
-    projeto = _extract_project(msg) if not atrasados else _extract_project(msg)
+    projeto = _extract_project(msg)
 
-    if _LIST_RE.search(msg) or atrasados or status or 'ticket' in msg.lower() or 'tarefa' in msg.lower():
-        return await _handle_list(deps, status=status, projeto=projeto, atrasados=atrasados)
+    priority = None
+    if _URGENT_RE.search(msg):
+        priority = 'Highest'
+    elif _HIGH_PRIO_RE.search(msg):
+        priority = 'High'
+
+    issue_type = None
+    if _BUG_RE.search(msg):
+        issue_type = 'Bug'
+    elif _STORY_RE.search(msg):
+        issue_type = 'Story'
+
+    as_reporter = bool(_REPORTER_RE.search(msg))
+
+    if (_LIST_RE.search(msg) or atrasados or status or priority or issue_type or as_reporter
+            or 'ticket' in msg.lower() or 'tarefa' in msg.lower()):
+        return await _handle_list(
+            deps, status=status, projeto=projeto, atrasados=atrasados,
+            priority=priority, issue_type=issue_type, as_reporter=as_reporter,
+        )
 
     # Fallback
     return (
         "Não entendi o comando. Exemplos do que posso fazer:\n"
         "• `meus tickets` — listar todos os seus tickets\n"
-        "• `tickets atrasados` — ver tickets em atraso\n"
+        "• `tickets atrasados` / `urgentes` / `meus bugs`\n"
         "• `detalha KAN-4` — ver detalhes de um ticket específico\n"
+        "• `comentários do KAN-4` — ver últimos comentários\n"
+        "• `pega o KAN-4 pra mim` — atribuir a você\n"
         "• `comente no KAN-4: seu texto` — adicionar comentário"
     )
 
 
-async def _handle_list(deps: Deps, status=None, projeto=None, atrasados=False) -> str:
+async def _handle_list(
+    deps: Deps,
+    status=None,
+    projeto=None,
+    atrasados=False,
+    priority: Optional[str] = None,
+    issue_type: Optional[str] = None,
+    as_reporter: bool = False,
+) -> str:
     try:
         tickets = await deps.jira.search_tickets(
             account_id=deps.account_id,
@@ -207,6 +280,9 @@ async def _handle_list(deps: Deps, status=None, projeto=None, atrasados=False) -
             projeto=projeto,
             atrasados=atrasados,
             limite=10,
+            priority=priority,
+            issue_type=issue_type,
+            as_reporter=as_reporter,
         )
     except Exception as e:
         logger.error("keyword_list_error", error=str(e))
@@ -214,6 +290,55 @@ async def _handle_list(deps: Deps, status=None, projeto=None, atrasados=False) -
 
     visible = [t for t in tickets if usuario_pode_ver(deps.account_id, t)]
     return fmt.format_ticket_list(visible, total_available=len(tickets) if len(tickets) > len(visible) else None)
+
+
+async def _handle_list_comments(chave: str, deps: Deps) -> str:
+    try:
+        ticket = await deps.jira.get_ticket(chave)
+        if ticket is None:
+            return fmt.format_ticket_not_found(chave)
+        if not usuario_pode_ver(deps.account_id, ticket):
+            return fmt.format_permission_denied(chave, "visualizar")
+        comments = await deps.jira.list_comments(chave, max_results=5)
+    except Exception as e:
+        logger.error("keyword_list_comments_error", error=str(e))
+        return fmt.format_jira_unavailable()
+
+    return fmt.format_comments_list(chave, comments)
+
+
+async def _handle_search(query: str, deps: Deps) -> str:
+    try:
+        tickets = await deps.jira.search_tickets(
+            account_id=deps.account_id,
+            text_query=query,
+            limite=10,
+        )
+    except Exception as e:
+        logger.error("keyword_search_error", error=str(e), query=query)
+        return fmt.format_jira_unavailable()
+
+    visible = [t for t in tickets if usuario_pode_ver(deps.account_id, t)]
+    if not visible:
+        return fmt.format_search_empty(query)
+    return fmt.format_ticket_list(visible, total_available=len(tickets) if len(tickets) > len(visible) else None)
+
+
+async def _handle_assign_to_me(chave: str, deps: Deps) -> str:
+    try:
+        ticket = await deps.jira.get_ticket(chave)
+    except Exception as e:
+        logger.error("keyword_assign_error", error=str(e))
+        return fmt.format_jira_unavailable()
+
+    if ticket is None:
+        return fmt.format_ticket_not_found(chave)
+
+    conv_cache.set_pending(
+        deps.conversation_id,
+        PendingAction(tool="atribuir_ticket", args={"chave": chave}),
+    )
+    return fmt.format_assign_confirmation(chave)
 
 
 async def _handle_detail(chave: str, deps: Deps) -> str:

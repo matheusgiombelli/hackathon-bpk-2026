@@ -10,6 +10,12 @@ class JiraUser(BaseModel):
     email_address: Optional[str] = None
 
 
+class JiraComment(BaseModel):
+    author: str
+    body: str
+    created: datetime
+
+
 class JiraTicket(BaseModel):
     key: str
     summary: str

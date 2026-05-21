@@ -18,7 +18,7 @@ from tenacity import (
 )
 
 from src.config import settings
-from src.jira.models import JiraTicket, JiraUser
+from src.jira.models import JiraComment, JiraTicket, JiraUser
 
 logger = structlog.get_logger(__name__)
 
@@ -73,8 +73,13 @@ def _build_jql(
     status: Optional[str],
     projeto: Optional[str],
     atrasados: bool,
+    priority: Optional[str] = None,
+    issue_type: Optional[str] = None,
+    text_query: Optional[str] = None,
+    as_reporter: bool = False,
 ) -> str:
-    conditions: list[str] = [f'assignee = "{_escape_jql(account_id)}"']
+    user_field = "reporter" if as_reporter else "assignee"
+    conditions: list[str] = [f'{user_field} = "{_escape_jql(account_id)}"']
 
     if status:
         jql_statuses = STATUS_JQL_MAP.get(status.lower(), [status])
@@ -84,12 +89,33 @@ def _build_jql(
     if projeto:
         conditions.append(f'project = "{_escape_jql(projeto.upper())}"')
 
+    if priority:
+        conditions.append(f'priority = "{_escape_jql(priority)}"')
+
+    if issue_type:
+        conditions.append(f'issuetype = "{_escape_jql(issue_type)}"')
+
+    if text_query:
+        conditions.append(f'text ~ "{_escape_jql(text_query)}"')
+
     if atrasados:
         conditions.append("duedate < now()")
         conditions.append('status NOT IN ("Done", "Closed", "Resolved", "Concluído")')
 
-    conditions.append("ORDER BY updated DESC")
-    return " AND ".join(c for c in conditions if "ORDER BY" not in c) + " ORDER BY updated DESC"
+    return " AND ".join(conditions) + " ORDER BY updated DESC"
+
+
+def _extract_adf_text(node: Any) -> str:
+    """Extract plain text from an Atlassian Document Format node."""
+    if isinstance(node, dict):
+        if node.get("type") == "text":
+            return node.get("text", "")
+        parts = [_extract_adf_text(c) for c in node.get("content", []) or []]
+        joiner = "\n" if node.get("type") in {"paragraph", "heading", "listItem"} else ""
+        return joiner.join(p for p in parts if p)
+    if isinstance(node, list):
+        return "".join(_extract_adf_text(c) for c in node)
+    return ""
 
 
 def _parse_ticket(issue: dict) -> JiraTicket:
@@ -219,8 +245,16 @@ class JiraClient:
         projeto: Optional[str] = None,
         atrasados: bool = False,
         limite: int = 10,
+        priority: Optional[str] = None,
+        issue_type: Optional[str] = None,
+        text_query: Optional[str] = None,
+        as_reporter: bool = False,
     ) -> list[JiraTicket]:
-        jql = _build_jql(account_id, status, projeto, atrasados)
+        jql = _build_jql(
+            account_id, status, projeto, atrasados,
+            priority=priority, issue_type=issue_type,
+            text_query=text_query, as_reporter=as_reporter,
+        )
         fields = ["summary", "project", "status", "priority", "assignee", "reporter",
                   "created", "updated", "duedate"]
         logger.info("jira_search", jql=jql, limit=limite)
@@ -230,6 +264,32 @@ class JiraClient:
             {"jql": jql, "maxResults": limite, "fields": fields},
         )
         return [_parse_ticket(issue) for issue in data.get("issues", [])]
+
+    async def list_comments(self, key: str, max_results: int = 5) -> list[JiraComment]:
+        """Return the most recent comments on a ticket."""
+        data = await self._get(
+            f"/rest/api/3/issue/{key}/comment",
+            params={"maxResults": max_results, "orderBy": "-created"},
+        )
+        out: list[JiraComment] = []
+        for c in data.get("comments", []):
+            body_text = _extract_adf_text(c.get("body", {})).strip() or "(sem texto)"
+            author = c.get("author", {}).get("displayName", "—")
+            created_raw = c.get("created", "")
+            try:
+                created = datetime.strptime(
+                    created_raw[:26].replace("Z", "+00:00"),
+                    "%Y-%m-%dT%H:%M:%S.%f%z",
+                )
+            except (ValueError, IndexError):
+                created = datetime.now(tz=timezone.utc)
+            out.append(JiraComment(author=author, body=body_text, created=created))
+        return out
+
+    async def assign_ticket(self, key: str, account_id: str) -> None:
+        """Assign a ticket to a specific account_id."""
+        await self._put(f"/rest/api/3/issue/{key}/assignee", {"accountId": account_id})
+        logger.info("ticket_assigned", key=key, account_id=account_id)
 
     async def get_ticket(self, key: str) -> Optional[JiraTicket]:
         try:

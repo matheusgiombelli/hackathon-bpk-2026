@@ -66,10 +66,8 @@ async def root():
 @app.post("/chat")
 async def chat(req: ChatRequest):
     from src.cache import conversational as conv_cache
-    from src.formatting.responses import format_comment_success, format_jira_unavailable
     from src.identity import resolver as identity_resolver
     from src.jira.client import JiraClient
-    from src.nlu import agent as nlu
     from src.nlu.tools import Deps
 
     jira = JiraClient()
@@ -78,20 +76,36 @@ async def chat(req: ChatRequest):
         return {"response": "Não consegui identificar seu usuário. Verifique o mapeamento em data/user_mapping.json."}
 
     deps = Deps(account_id=account_id, jira=jira, conversation_id=req.conversation_id)
-    pending = conv_cache.get_pending(req.conversation_id)
+    response = await _process_chat_turn(req.message, deps, jira, account_id)
 
-    if pending and _CONFIRM_RE.search(req.message):
-        conv_cache.clear_pending(req.conversation_id)
-        if pending.tool == "comentar_ticket":
-            try:
+    conv_cache.add_turn(req.conversation_id, "user", req.message)
+    conv_cache.add_turn(req.conversation_id, "assistant", response)
+    return {"response": response}
+
+
+async def _process_chat_turn(message: str, deps, jira, account_id: str) -> str:
+    from src.cache import conversational as conv_cache
+    from src.formatting.responses import (
+        format_assign_success,
+        format_comment_success,
+        format_create_ticket_success,
+        format_jira_unavailable,
+        format_update_priority_success,
+        format_update_status_failed,
+        format_update_status_success,
+    )
+    from src.nlu import agent as nlu
+
+    pending = conv_cache.get_pending(deps.conversation_id)
+
+    if pending and _CONFIRM_RE.search(message):
+        conv_cache.clear_pending(deps.conversation_id)
+        try:
+            if pending.tool == "comentar_ticket":
                 await jira.add_comment(pending.args["chave"], pending.args["texto"], account_id)
-                return {"response": format_comment_success(pending.args["chave"])}
-            except Exception:
-                return {"response": format_jira_unavailable()}
+                return format_comment_success(pending.args["chave"])
 
-        if pending.tool == "criar_ticket":
-            from src.formatting.responses import format_create_ticket_success
-            try:
+            if pending.tool == "criar_ticket":
                 key = await jira.create_ticket(
                     project_key=pending.args["project"],
                     summary=pending.args["summary"],
@@ -99,36 +113,31 @@ async def chat(req: ChatRequest):
                     priority=pending.args.get("priority"),
                     account_id=account_id,
                 )
-                return {"response": format_create_ticket_success(key, pending.args["summary"])}
-            except Exception:
-                return {"response": format_jira_unavailable()}
+                return format_create_ticket_success(key, pending.args["summary"])
 
-        if pending.tool == "atualizar_status":
-            from src.formatting.responses import format_update_status_success, format_update_status_failed
-            try:
+            if pending.tool == "atualizar_status":
                 ok = await jira.transition_ticket(pending.args["chave"], pending.args["status"])
                 if ok:
-                    return {"response": format_update_status_success(pending.args["chave"], pending.args["status"])}
-                return {"response": format_update_status_failed(pending.args["chave"])}
-            except Exception:
-                return {"response": format_jira_unavailable()}
+                    return format_update_status_success(pending.args["chave"], pending.args["status"])
+                return format_update_status_failed(pending.args["chave"])
 
-        if pending.tool == "atualizar_prioridade":
-            from src.formatting.responses import format_update_priority_success
-            try:
+            if pending.tool == "atualizar_prioridade":
                 await jira.update_priority(pending.args["chave"], pending.args["priority"])
-                return {"response": format_update_priority_success(pending.args["chave"], pending.args["priority"])}
-            except Exception:
-                return {"response": format_jira_unavailable()}
+                return format_update_priority_success(pending.args["chave"], pending.args["priority"])
 
-        return {"response": "Ação confirmada."}
+            if pending.tool == "atribuir_ticket":
+                await jira.assign_ticket(pending.args["chave"], account_id)
+                return format_assign_success(pending.args["chave"])
+        except Exception:
+            return format_jira_unavailable()
 
-    if pending and _REJECT_RE.search(req.message):
-        conv_cache.clear_pending(req.conversation_id)
-        return {"response": "Ação cancelada."}
+        return "Ação confirmada."
 
-    response = await nlu.run(req.message, deps)
-    return {"response": response}
+    if pending and _REJECT_RE.search(message):
+        conv_cache.clear_pending(deps.conversation_id)
+        return "Ação cancelada."
+
+    return await nlu.run(message, deps)
 
 
 # ── Bot Framework endpoint ───────────────────────────────────────────────────

@@ -23,7 +23,7 @@ services:
         condition: service_healthy
     environment:
       - OLLAMA_HOST=http://ollama:11434
-    entrypoint: ["ollama", "pull", "gemma4:e4b"]
+    entrypoint: ["ollama", "pull", "gemma4:e2b"]
     restart: "no"
 
   app:
@@ -37,7 +37,7 @@ services:
       # Estas variáveis sobrescrevem o .env e apontam para o Ollama local
       LLM_BASE_URL: http://ollama:11434/v1
       LLM_API_KEY: ollama
-      OPENROUTER_MODEL: gemma4:e4b
+      OPENROUTER_MODEL: gemma4:e2b
     volumes:
       - ./data:/app/data   # user_mapping.json editável sem rebuild
       - ./logs:/app/logs

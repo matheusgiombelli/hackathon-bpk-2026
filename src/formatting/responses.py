@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List
-from src.jira.models import JiraTicket
+from src.jira.models import JiraComment, JiraTicket
 
 
 def format_ticket_list(tickets: List[JiraTicket], total_available: int | None = None) -> str:
@@ -126,3 +126,31 @@ def format_update_priority_confirmation(key: str, priority: str) -> str:
 
 def format_update_priority_success(key: str, priority: str) -> str:
     return f"✅ Prioridade do ticket **{key}** atualizada para **{_PRIORITY_LABELS.get(priority, priority)}**."
+
+
+def format_comments_list(ticket_key: str, comments: List[JiraComment]) -> str:
+    if not comments:
+        return f"Nenhum comentário no ticket **{ticket_key}**."
+    lines = [f"**Comentários de {ticket_key}** (mais recentes primeiro):"]
+    for c in comments:
+        when = c.created.strftime("%d/%m %H:%M")
+        body = c.body.replace("\n", " ")
+        if len(body) > 280:
+            body = body[:280] + "…"
+        lines.append(f"• _{c.author}_ — {when}\n  > {body}")
+    return "\n".join(lines)
+
+
+def format_assign_confirmation(ticket_key: str) -> str:
+    return (
+        f"Confirma atribuir o ticket **{ticket_key}** a você?\n\n"
+        f"Responda **sim** para confirmar ou **não** para cancelar."
+    )
+
+
+def format_assign_success(ticket_key: str) -> str:
+    return f"✅ Ticket **{ticket_key}** atribuído a você."
+
+
+def format_search_empty(query: str) -> str:
+    return f"Nenhum ticket encontrado para a busca _{query}_."
