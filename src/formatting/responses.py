@@ -31,6 +31,8 @@ def format_ticket_detail(ticket: JiraTicket) -> str:
     assignee = ticket.assignee.display_name if ticket.assignee else "Não atribuído"
     reporter = ticket.reporter.display_name if ticket.reporter else "—"
     due = ticket.due_date.strftime("%d/%m/%Y") if ticket.due_date else "Sem prazo"
+    created = ticket.created.strftime("%d/%m/%Y")
+    updated = ticket.updated.strftime("%d/%m/%Y")
     overdue_line = f"\n⚠️ **Atrasado** há {ticket.days_overdue} dia(s)" if ticket.is_overdue else ""
 
     return (
@@ -40,8 +42,9 @@ def format_ticket_detail(ticket: JiraTicket) -> str:
         f"Prioridade: {ticket.priority or '—'}\n"
         f"Responsável: {assignee}\n"
         f"Solicitante: {reporter}\n"
-        f"Prazo: {due}\n"
-        f"Última atualização: há {ticket.days_since_update} dia(s)"
+        f"Criado em: {created}\n"
+        f"Última atualização: {updated}\n"
+        f"Prazo: {due}"
         f"{overdue_line}"
     )
 
