@@ -24,7 +24,7 @@ logger = structlog.get_logger(__name__)
 
 # Status labels Jira → português
 STATUS_MAP = {
-    "pendente": ["To Do", "Open", "Backlog", "Em aberto"],
+    "pendente": ["To Do", "Open", "Backlog", "Em aberto", "A fazer"],
     "em_andamento": ["In Progress", "Em andamento", "In Review", "Em revisão"],
     "concluido": ["Done", "Closed", "Resolved", "Concluído", "Fechado"],
 }

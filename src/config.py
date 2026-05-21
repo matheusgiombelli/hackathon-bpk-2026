@@ -10,9 +10,11 @@ class Settings(BaseSettings):
     jira_email: str = ""
     jira_api_token: str = ""
 
-    # LLM
+    # LLM — pode ser OpenRouter ou LM Studio local
     openrouter_api_key: str = ""
     openrouter_model: str = "anthropic/claude-3-haiku"
+    llm_base_url: str = ""          # ex: http://localhost:1234/v1 para LM Studio
+    llm_api_key: str = "lm-studio"  # qualquer string funciona para LM Studio
 
     # Bot Framework (empty = unauthenticated, use for local emulator)
     microsoft_app_id: str = ""

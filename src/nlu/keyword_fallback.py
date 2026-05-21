@@ -18,26 +18,25 @@ from src.rules.authorization import usuario_pode_comentar, usuario_pode_ver
 
 logger = structlog.get_logger(__name__)
 
-_TICKET_KEY_RE = re.compile(r'\b([A-Z]+-\d+)\b')
+_TICKET_KEY_RE = re.compile(r'\b([A-Za-z]+-\d+)\b')
 _COMMENT_RE = re.compile(
-    r'(?:coment[ea](?:r|ndo)?|adiciona(?:r)? coment[aá]rio)\s+(?:n[oa]\s+)?([A-Z]+-\d+)\s*[:\-]\s*(.+)',
+    r'(?:coment[ea](?:r|ndo)?|adiciona(?:r)?(?:\s+um?)?\s*coment[aá]rio|posta(?:r)?)\s+(?:n[oa]\s+)?([A-Za-z]+-\d+)\s*[:\-]\s*(.+)',
     re.IGNORECASE,
 )
 _DETAIL_RE = re.compile(
-    r'(?:detalha(?:r)?|detalhes?\s+d[oa]?|abrir?|ver?|mostra(?:r)?|info(?:rma[cç][oõ]es?)?\s+d[oa]?)\s+([A-Z]+-\d+)',
+    r'(?:detalha(?:r)?|detalhes?\s*(?:d[oa])?|abr(?:e|ir)|ver?|mostra(?:r)?|abre|exibe(?:r)?|info(?:rma[cç][oõ]es?)?\s*(?:d[oa])?|o\s+que\s+[eé]|status\s+d[oa]?)\s+([A-Za-z]+-\d+)',
     re.IGNORECASE,
 )
-_OVERDUE_RE = re.compile(r'\b(atrasad[ao]s?|vencid[ao]s?|em\s+atraso)\b', re.IGNORECASE)
-_PENDING_RE = re.compile(r'\b(pendentes?|a\s+fazer|to\s*do|em\s+aberto|abertos?)\b', re.IGNORECASE)
-_INPROG_RE = re.compile(r'\b(em\s+andamento|in\s+progress|fazendo|executand[ao])\b', re.IGNORECASE)
-_DONE_RE = re.compile(r'\b(conclu[ií]d[ao]s?|feitos?|done|finalizado)\b', re.IGNORECASE)
+_OVERDUE_RE = re.compile(r'\b(atrasad[ao]s?|vencid[ao]s?|em\s+atraso|late|overdue|prazo\s+vencid[ao]?)\b', re.IGNORECASE)
+_PENDING_RE = re.compile(r'\b(pendentes?|a\s+fazer|to\s*do|em\s+aberto|abertos?|n[aã]o\s+(?:feitos?|iniciados?))\b', re.IGNORECASE)
+_INPROG_RE = re.compile(r'\b(em\s+andamento|in\s+progress|fazendo|executand[ao]|trabalhando)\b', re.IGNORECASE)
+_DONE_RE = re.compile(r'\b(conclu[ií]d[ao]s?|feitos?|done|finalizado|resolvid[ao]s?|fechad[ao]s?)\b', re.IGNORECASE)
 _LIST_RE = re.compile(
-    r'\b(lista(?:r)?|listar?|quais?|meus?\s+tickets?|status\s+dos?|tickets?|tarefa|tarefas)\b',
+    r'\b(lista(?:r)?|listar?|quais?|meus?\s+(?:tickets?|tiquetes?)|status\s+dos?|tickets?|tiquetes?|ticks?|tarefas?|atividades?|demandas?|issues?|cards?|atividade)\b',
     re.IGNORECASE,
 )
 _PROJECT_RE = re.compile(r'\b(?:projeto\s+)?([A-Z]{2,10})\b')
-
-_HELP_RE = re.compile(r'\b(ajuda|help|oi|ol[aá]|inicio|start|o\s+que\s+voc[eê])\b', re.IGNORECASE)
+_HELP_RE = re.compile(r'\b(ajuda|help|oi|ol[aá]|inicio|start|o\s+que\s+voc[eê]|comandos?|como\s+usar)\b', re.IGNORECASE)
 
 
 def _extract_project(text: str) -> Optional[str]:
