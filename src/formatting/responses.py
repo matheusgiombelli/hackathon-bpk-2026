@@ -75,3 +75,51 @@ def format_identity_unknown() -> str:
         "Não consegui identificar seu usuário no Jira. "
         "Entre em contato com o administrador para configurar o mapeamento."
     )
+
+
+_STATUS_LABELS = {"in_progress": "Em andamento", "done": "Concluído", "pending": "A fazer"}
+_PRIORITY_LABELS = {"Highest": "Crítica", "High": "Alta", "Medium": "Média", "Low": "Baixa", "Lowest": "Mínima"}
+
+
+def format_create_ticket_confirmation(project: str, summary: str, issue_type: str, priority: str | None) -> str:
+    priority_line = f"\nPrioridade: **{_PRIORITY_LABELS.get(priority, priority)}**" if priority else ""
+    return (
+        f"Confirma a criação do ticket?\n\n"
+        f"Projeto: **{project.upper()}**\n"
+        f"Tipo: **{issue_type}**\n"
+        f"Resumo: _{summary}_"
+        f"{priority_line}\n\n"
+        f"Responda **sim** para confirmar ou **não** para cancelar."
+    )
+
+
+def format_create_ticket_success(key: str, summary: str) -> str:
+    return f"✅ Ticket **{key}** criado com sucesso!\n_{summary}_"
+
+
+def format_update_status_confirmation(key: str, status: str) -> str:
+    label = _STATUS_LABELS.get(status, status)
+    return (
+        f"Confirma a mudança de status do ticket **{key}** para **{label}**?\n\n"
+        f"Responda **sim** para confirmar ou **não** para cancelar."
+    )
+
+
+def format_update_status_success(key: str, status: str) -> str:
+    return f"✅ Status do ticket **{key}** atualizado para **{_STATUS_LABELS.get(status, status)}**."
+
+
+def format_update_status_failed(key: str) -> str:
+    return f"⚠️ Não consegui alterar o status do **{key}**. Verifique as transições disponíveis no Jira."
+
+
+def format_update_priority_confirmation(key: str, priority: str) -> str:
+    label = _PRIORITY_LABELS.get(priority, priority)
+    return (
+        f"Confirma a mudança de prioridade do ticket **{key}** para **{label}**?\n\n"
+        f"Responda **sim** para confirmar ou **não** para cancelar."
+    )
+
+
+def format_update_priority_success(key: str, priority: str) -> str:
+    return f"✅ Prioridade do ticket **{key}** atualizada para **{_PRIORITY_LABELS.get(priority, priority)}**."

@@ -193,7 +193,21 @@ class JiraClient:
                 resp = await client.post(f"{self._base_url}{path}", json=body)
                 resp.raise_for_status()
                 self._circuit.record_success()
+                if resp.status_code == 204 or not resp.content:
+                    return {}
                 return resp.json()
+            except (httpx.HTTPStatusError, httpx.TransportError, httpx.TimeoutException) as e:
+                self._circuit.record_failure()
+                raise e
+
+    async def _put(self, path: str, body: dict) -> None:
+        if self._circuit.is_open():
+            raise RuntimeError("Jira circuit breaker is open")
+        async with httpx.AsyncClient(headers=self._headers, timeout=self._timeout) as client:
+            try:
+                resp = await client.put(f"{self._base_url}{path}", json=body)
+                resp.raise_for_status()
+                self._circuit.record_success()
             except (httpx.HTTPStatusError, httpx.TransportError, httpx.TimeoutException) as e:
                 self._circuit.record_failure()
                 raise e
@@ -255,3 +269,55 @@ class JiraClient:
         except Exception:
             pass
         return None
+
+    async def create_ticket(
+        self,
+        project_key: str,
+        summary: str,
+        issue_type: str = "Task",
+        description: Optional[str] = None,
+        priority: Optional[str] = None,
+        account_id: Optional[str] = None,
+    ) -> str:
+        """Creates a new ticket and returns its key (e.g. 'KAN-11')."""
+        fields: dict[str, Any] = {
+            "project": {"key": project_key.upper()},
+            "summary": summary,
+            "issuetype": {"name": issue_type},
+        }
+        if description:
+            fields["description"] = {
+                "type": "doc", "version": 1,
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": description}]}],
+            }
+        if priority:
+            fields["priority"] = {"name": priority}
+        if account_id:
+            fields["assignee"] = {"accountId": account_id}
+        data = await self._post("/rest/api/3/issue", {"fields": fields})
+        logger.info("ticket_created", key=data.get("key"))
+        return data["key"]
+
+    async def transition_ticket(self, key: str, target_status: str) -> bool:
+        """Transition ticket to a new status. target_status: 'in_progress'|'done'|'pending'."""
+        STATUS_ALIASES: dict[str, list[str]] = {
+            "in_progress": ["In Progress", "Em andamento", "Start Progress", "Start", "In Review"],
+            "done": ["Done", "Resolve Issue", "Close Issue", "Concluído", "Fechar", "Mark as Done", "Resolved"],
+            "pending": ["To Do", "Reopen Issue", "Reopen", "Stop Progress", "A fazer", "Backlog", "Open"],
+        }
+        aliases = STATUS_ALIASES.get(target_status, [target_status])
+        transitions_data = await self._get(f"/rest/api/3/issue/{key}/transitions")
+        transitions = transitions_data.get("transitions", [])
+        for t in transitions:
+            if t["name"] in aliases or t.get("to", {}).get("name", "") in aliases:
+                await self._post(f"/rest/api/3/issue/{key}/transitions", {"transition": {"id": t["id"]}})
+                logger.info("ticket_transitioned", key=key, target=target_status, transition=t["name"])
+                return True
+        logger.warning("transition_not_found", key=key, target=target_status,
+                       available=[t["name"] for t in transitions])
+        return False
+
+    async def update_priority(self, key: str, priority: str) -> None:
+        """Update ticket priority. priority: 'Highest'|'High'|'Medium'|'Low'|'Lowest'."""
+        await self._put(f"/rest/api/3/issue/{key}", {"fields": {"priority": {"name": priority}}})
+        logger.info("priority_updated", key=key, priority=priority)

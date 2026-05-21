@@ -88,6 +88,39 @@ async def chat(req: ChatRequest):
                 return {"response": format_comment_success(pending.args["chave"])}
             except Exception:
                 return {"response": format_jira_unavailable()}
+
+        if pending.tool == "criar_ticket":
+            from src.formatting.responses import format_create_ticket_success
+            try:
+                key = await jira.create_ticket(
+                    project_key=pending.args["project"],
+                    summary=pending.args["summary"],
+                    issue_type=pending.args.get("issue_type", "Task"),
+                    priority=pending.args.get("priority"),
+                    account_id=account_id,
+                )
+                return {"response": format_create_ticket_success(key, pending.args["summary"])}
+            except Exception:
+                return {"response": format_jira_unavailable()}
+
+        if pending.tool == "atualizar_status":
+            from src.formatting.responses import format_update_status_success, format_update_status_failed
+            try:
+                ok = await jira.transition_ticket(pending.args["chave"], pending.args["status"])
+                if ok:
+                    return {"response": format_update_status_success(pending.args["chave"], pending.args["status"])}
+                return {"response": format_update_status_failed(pending.args["chave"])}
+            except Exception:
+                return {"response": format_jira_unavailable()}
+
+        if pending.tool == "atualizar_prioridade":
+            from src.formatting.responses import format_update_priority_success
+            try:
+                await jira.update_priority(pending.args["chave"], pending.args["priority"])
+                return {"response": format_update_priority_success(pending.args["chave"], pending.args["priority"])}
+            except Exception:
+                return {"response": format_jira_unavailable()}
+
         return {"response": "Ação confirmada."}
 
     if pending and _REJECT_RE.search(req.message):

@@ -21,6 +21,9 @@ Intenções possíveis:
 - list_tickets: listar tickets. Params: overdue (bool), status ("pending"|"in_progress"|"done"|null), project (str|null)
 - ticket_detail: ver detalhes de um ticket. Params: key (ex: "KAN-5")
 - add_comment: adicionar comentário. Params: key, text
+- create_ticket: criar novo ticket. Params: project (str, ex: "KAN"), summary (str), issue_type ("Task"|"Bug"|"Story"), priority ("Highest"|"High"|"Medium"|"Low"|"Lowest"|null)
+- update_status: mudar status de um ticket. Params: key, status ("in_progress"|"done"|"pending")
+- update_priority: mudar prioridade de um ticket. Params: key, priority ("Highest"|"High"|"Medium"|"Low"|"Lowest")
 - help: ajuda ou saudação
 - out_of_scope: fora do escopo
 
@@ -35,6 +38,14 @@ Usuário: "tem algo urgente?" → {"intent":"list_tickets","params":{"overdue":t
 Usuário: "o que devo focar hoje?" → {"intent":"list_tickets","params":{"overdue":true,"status":null,"project":null}}
 Usuário: "pendentes" → {"intent":"list_tickets","params":{"overdue":false,"status":"pending","project":null}}
 Usuário: "em andamento" → {"intent":"list_tickets","params":{"overdue":false,"status":"in_progress","project":null}}
+Usuário: "cria um ticket no KAN: implementar login social" → {"intent":"create_ticket","params":{"project":"KAN","summary":"Implementar login social","issue_type":"Task","priority":null}}
+Usuário: "novo bug no KAN: botão salvar não funciona" → {"intent":"create_ticket","params":{"project":"KAN","summary":"Botão salvar não funciona","issue_type":"Bug","priority":"High"}}
+Usuário: "cria tarefa urgente no KAN: revisar deploy" → {"intent":"create_ticket","params":{"project":"KAN","summary":"Revisar deploy","issue_type":"Task","priority":"Highest"}}
+Usuário: "move o KAN-5 para em andamento" → {"intent":"update_status","params":{"key":"KAN-5","status":"in_progress"}}
+Usuário: "fecha o KAN-7" → {"intent":"update_status","params":{"key":"KAN-7","status":"done"}}
+Usuário: "começa o KAN-9" → {"intent":"update_status","params":{"key":"KAN-9","status":"in_progress"}}
+Usuário: "muda prioridade do KAN-8 para alta" → {"intent":"update_priority","params":{"key":"KAN-8","priority":"High"}}
+Usuário: "KAN-10 é crítico" → {"intent":"update_priority","params":{"key":"KAN-10","priority":"Highest"}}
 Usuário: "ajuda" → {"intent":"help","params":{}}
 Usuário: "qual o tempo hoje?" → {"intent":"out_of_scope","params":{}}
 
@@ -127,6 +138,30 @@ async def run(user_message: str, deps: Deps) -> str:
         if key and text:
             return await keyword_fallback._handle_comment(key.upper(), text, deps)
 
+    elif intent == "create_ticket":
+        project = params.get("project") or "KAN"
+        summary = params.get("summary", "").strip()
+        if summary:
+            return await keyword_fallback._handle_create(
+                project=project.upper(),
+                summary=summary,
+                issue_type=params.get("issue_type") or "Task",
+                priority=params.get("priority"),
+                deps=deps,
+            )
+
+    elif intent == "update_status":
+        key = params.get("key", "")
+        status = params.get("status", "")
+        if key and status:
+            return await keyword_fallback._handle_transition(key.upper(), status, deps)
+
+    elif intent == "update_priority":
+        key = params.get("key", "")
+        priority = params.get("priority", "")
+        if key and priority:
+            return await keyword_fallback._handle_priority(key.upper(), priority, deps)
+
     elif intent == "help":
         return (
             "Olá! Posso te ajudar com:\n"
@@ -134,6 +169,9 @@ async def run(user_message: str, deps: Deps) -> str:
             "• `tickets atrasados` — ver o que está em atraso\n"
             "• `detalha KAN-5` — detalhes de um ticket\n"
             "• `comenta no KAN-5: texto` — adicionar comentário\n"
+            "• `cria ticket no KAN: resumo` — criar novo ticket\n"
+            "• `move KAN-5 para em andamento` — mudar status\n"
+            "• `muda prioridade do KAN-8 para alta` — mudar prioridade\n"
         )
 
     elif intent == "out_of_scope":

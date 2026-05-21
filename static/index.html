@@ -10,12 +10,120 @@
     body {
       font-family: 'Segoe UI', system-ui, sans-serif;
       background: #1a1a2e;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 20px;
+      padding: 24px;
     }
 
+    /* ══════════════════════════════
+       PAINEL DE COMANDOS (esquerda)
+    ══════════════════════════════ */
+    .cmd-panel {
+      width: 260px;
+      background: #16213e;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+      display: flex;
+      flex-direction: column;
+      max-height: 680px;
+    }
+
+    .cmd-panel-header {
+      background: #0f3460;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cmd-panel-header h3 {
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .cmd-panel-header span {
+      color: #8ba3c7;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+
+    .cmd-scroll {
+      overflow-y: auto;
+      flex: 1;
+      padding: 12px 10px;
+    }
+    .cmd-scroll::-webkit-scrollbar { width: 3px; }
+    .cmd-scroll::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 2px; }
+
+    .cmd-group {
+      margin-bottom: 16px;
+    }
+    .cmd-group-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #4a6285;
+      padding: 0 6px 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cmd-group-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #1a3055;
+    }
+
+    .cmd-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background .15s;
+      margin-bottom: 2px;
+    }
+    .cmd-item:hover { background: #0f3460; }
+    .cmd-item:hover .cmd-text { color: #d6e4f7; }
+
+    .cmd-icon {
+      font-size: 14px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .cmd-text {
+      font-size: 12.5px;
+      color: #8ba3c7;
+      line-height: 1.4;
+    }
+    .cmd-text strong {
+      display: block;
+      color: #a8c0e0;
+      font-weight: 500;
+      font-size: 12px;
+    }
+    .cmd-text small {
+      font-size: 11px;
+      color: #4a6285;
+    }
+
+    .cmd-footer {
+      padding: 10px 12px;
+      border-top: 1px solid #1a3055;
+      font-size: 11px;
+      color: #4a6285;
+      text-align: center;
+    }
+
+    /* ══════════════════════════════
+       CHAT (direita)
+    ══════════════════════════════ */
     .shell {
       width: 420px;
       height: 680px;
@@ -27,7 +135,6 @@
       box-shadow: 0 24px 64px rgba(0,0,0,.6);
     }
 
-    /* ── header ── */
     .header {
       background: #0f3460;
       padding: 14px 18px;
@@ -50,7 +157,6 @@
       border-radius: 50%; margin-left: auto;
     }
 
-    /* ── messages ── */
     #messages {
       flex: 1;
       overflow-y: auto;
@@ -70,8 +176,8 @@
     .bubble {
       padding: 9px 13px;
       border-radius: 14px;
-      font-size: 13.5px;
-      line-height: 1.5;
+      font-size: 13px;
+      line-height: 1.55;
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -89,7 +195,7 @@
       width: 28px; height: 28px;
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700; flex-shrink: 0;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
       margin-top: 2px;
     }
     .msg.bot  .msg-avatar { background: #e94560; color: #fff; }
@@ -97,7 +203,6 @@
 
     .typing .bubble { color: #8ba3c7; font-style: italic; }
 
-    /* ── suggestions ── */
     .suggestions {
       padding: 0 16px 8px;
       display: flex;
@@ -117,7 +222,6 @@
     }
     .chip:hover { background: #1a4a7a; color: #d6e4f7; }
 
-    /* ── input ── */
     .input-row {
       padding: 12px 14px;
       background: #0f3460;
@@ -152,9 +256,209 @@
     }
     #send:hover { background: #c73652; }
     #send svg { width: 16px; height: 16px; fill: #fff; }
+
+    /* highlight no bubble para código */
+    .bubble code {
+      background: rgba(255,255,255,.12);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: 'Consolas', monospace;
+      font-size: .9em;
+    }
+    .bubble strong { font-weight: 600; }
+    .bubble em { font-style: italic; opacity: .85; }
   </style>
 </head>
 <body>
+
+<!-- ══ Painel de Comandos ══ -->
+<div class="cmd-panel">
+  <div class="cmd-panel-header">
+    <div style="font-size:18px">📋</div>
+    <div>
+      <h3>Comandos</h3>
+      <span>clique para usar</span>
+    </div>
+  </div>
+
+  <div class="cmd-scroll">
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🔍 Consultas</div>
+
+      <div class="cmd-item" onclick="useCmd('meus tickets')">
+        <span class="cmd-icon">📄</span>
+        <div class="cmd-text">
+          <strong>meus tickets</strong>
+          <small>lista todos os seus tickets</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('tickets atrasados')">
+        <span class="cmd-icon">⚠️</span>
+        <div class="cmd-text">
+          <strong>tickets atrasados</strong>
+          <small>tickets com prazo vencido</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('tickets em andamento')">
+        <span class="cmd-icon">🔄</span>
+        <div class="cmd-text">
+          <strong>tickets em andamento</strong>
+          <small>o que está sendo feito</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('pendentes')">
+        <span class="cmd-icon">🕐</span>
+        <div class="cmd-text">
+          <strong>pendentes</strong>
+          <small>tickets a fazer</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('tem algo urgente?')">
+        <span class="cmd-icon">🚨</span>
+        <div class="cmd-text">
+          <strong>tem algo urgente?</strong>
+          <small>linguagem natural</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('o que devo focar hoje?')">
+        <span class="cmd-icon">🎯</span>
+        <div class="cmd-text">
+          <strong>o que devo focar hoje?</strong>
+          <small>linguagem natural</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🎫 Detalhes</div>
+
+      <div class="cmd-item" onclick="useCmd('detalha KAN-5')">
+        <span class="cmd-icon">🔎</span>
+        <div class="cmd-text">
+          <strong>detalha KAN-5</strong>
+          <small>informações completas</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('me mostra o KAN-7')">
+        <span class="cmd-icon">👁️</span>
+        <div class="cmd-text">
+          <strong>me mostra o KAN-7</strong>
+          <small>linguagem natural</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">✏️ Criar</div>
+
+      <div class="cmd-item" onclick="useCmd('cria ticket no KAN: ')">
+        <span class="cmd-icon">➕</span>
+        <div class="cmd-text">
+          <strong>cria ticket no KAN: …</strong>
+          <small>nova tarefa (Task)</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('novo bug no KAN: ')">
+        <span class="cmd-icon">🐛</span>
+        <div class="cmd-text">
+          <strong>novo bug no KAN: …</strong>
+          <small>reportar problema</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('cria tarefa urgente no KAN: ')">
+        <span class="cmd-icon">🔥</span>
+        <div class="cmd-text">
+          <strong>cria tarefa urgente no KAN: …</strong>
+          <small>prioridade crítica</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">🔁 Status</div>
+
+      <div class="cmd-item" onclick="useCmd('move o KAN-8 para em andamento')">
+        <span class="cmd-icon">▶️</span>
+        <div class="cmd-text">
+          <strong>move o KAN-8 para em andamento</strong>
+          <small>iniciar trabalho</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('fecha o KAN-8')">
+        <span class="cmd-icon">✅</span>
+        <div class="cmd-text">
+          <strong>fecha o KAN-8</strong>
+          <small>concluir ticket</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('começa o KAN-8')">
+        <span class="cmd-icon">🚀</span>
+        <div class="cmd-text">
+          <strong>começa o KAN-8</strong>
+          <small>linguagem natural</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">⚡ Prioridade</div>
+
+      <div class="cmd-item" onclick="useCmd('muda prioridade do KAN-9 para alta')">
+        <span class="cmd-icon">⬆️</span>
+        <div class="cmd-text">
+          <strong>muda prioridade do KAN-9 para alta</strong>
+          <small>elevar prioridade</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('KAN-10 é crítico')">
+        <span class="cmd-icon">🔴</span>
+        <div class="cmd-text">
+          <strong>KAN-10 é crítico</strong>
+          <small>linguagem natural</small>
+        </div>
+      </div>
+
+      <div class="cmd-item" onclick="useCmd('muda prioridade do KAN-9 para baixa')">
+        <span class="cmd-icon">⬇️</span>
+        <div class="cmd-text">
+          <strong>muda prioridade do KAN-9 para baixa</strong>
+          <small>reduzir prioridade</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmd-group">
+      <div class="cmd-group-title">💬 Comentário</div>
+
+      <div class="cmd-item" onclick="useCmd('comenta no KAN-5: ')">
+        <span class="cmd-icon">💬</span>
+        <div class="cmd-text">
+          <strong>comenta no KAN-5: …</strong>
+          <small>adicionar comentário</small>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="cmd-footer">
+    Após criações/alterações, responda <strong style="color:#8ba3c7">sim</strong> para confirmar
+  </div>
+</div>
+
+<!-- ══ Chat ══ -->
 <div class="shell">
   <div class="header">
     <div class="avatar">JB</div>
@@ -170,11 +474,12 @@
   <div class="suggestions" id="chips">
     <span class="chip" onclick="send('meus tickets')">meus tickets</span>
     <span class="chip" onclick="send('tickets atrasados')">atrasados</span>
+    <span class="chip" onclick="send('tem algo urgente?')">urgente?</span>
     <span class="chip" onclick="send('ajuda')">ajuda</span>
   </div>
 
   <div class="input-row">
-    <textarea id="input" rows="1" placeholder="Digite uma mensagem…"></textarea>
+    <textarea id="input" rows="1" placeholder="Digite ou clique em um comando…"></textarea>
     <button id="send" onclick="sendInput()">
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
     </button>
@@ -186,6 +491,37 @@
   const inputEl    = document.getElementById('input');
   const convId     = 'webchat-' + Math.random().toString(36).slice(2);
 
+  // Formata markdown básico: **bold**, _italic_, `code`, • bullets
+  function renderMarkdown(text) {
+    const div = document.createElement('div');
+    div.className = 'bubble';
+    // Processa linha por linha
+    const lines = text.split('\n');
+    lines.forEach((line, i) => {
+      if (i > 0) div.appendChild(document.createElement('br'));
+      // inline: **bold**, _em_, `code`
+      const parts = line.split(/(\*\*[^*]+\*\*|_[^_]+_|`[^`]+`)/g);
+      parts.forEach(p => {
+        if (p.startsWith('**') && p.endsWith('**')) {
+          const b = document.createElement('strong');
+          b.textContent = p.slice(2, -2);
+          div.appendChild(b);
+        } else if (p.startsWith('_') && p.endsWith('_') && p.length > 2) {
+          const em = document.createElement('em');
+          em.textContent = p.slice(1, -1);
+          div.appendChild(em);
+        } else if (p.startsWith('`') && p.endsWith('`') && p.length > 2) {
+          const code = document.createElement('code');
+          code.textContent = p.slice(1, -1);
+          div.appendChild(code);
+        } else {
+          div.appendChild(document.createTextNode(p));
+        }
+      });
+    });
+    return div;
+  }
+
   function addMsg(text, who) {
     const wrap = document.createElement('div');
     wrap.className = `msg ${who}`;
@@ -194,9 +530,12 @@
     av.className = 'msg-avatar';
     av.textContent = who === 'bot' ? 'JB' : 'EU';
 
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.textContent = text;
+    const bubble = who === 'bot' ? renderMarkdown(text) : (() => {
+      const d = document.createElement('div');
+      d.className = 'bubble';
+      d.textContent = text;
+      return d;
+    })();
 
     wrap.appendChild(av);
     wrap.appendChild(bubble);
@@ -241,6 +580,20 @@
     }
   }
 
+  // Clique no painel de comandos: preenche o input e foca
+  function useCmd(text) {
+    inputEl.value = text;
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + 'px';
+    inputEl.focus();
+    // Posiciona cursor no final
+    inputEl.setSelectionRange(text.length, text.length);
+    // Se o comando não termina com espaço ou ":", envia direto
+    if (!text.endsWith(' ') && !text.endsWith(': ') && !text.endsWith(':')) {
+      send(text);
+    }
+  }
+
   function sendInput() {
     send(inputEl.value.trim());
   }
@@ -257,9 +610,8 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 80) + 'px';
   });
 
-  // Mensagem de boas-vindas
   setTimeout(() => addMsg(
-    'Olá! 👋 Sou o assistente de tickets Jira da Biopark.\n\nTente: "meus tickets", "tickets atrasados" ou "detalha KAN-5"',
+    'Olá! 👋 Sou o assistente de tickets Jira da Biopark.\n\nConsulte, crie e atualize tickets usando linguagem natural. Use o painel à esquerda para ver os comandos disponíveis.',
     'bot'
   ), 400);
 </script>
