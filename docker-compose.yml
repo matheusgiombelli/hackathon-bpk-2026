@@ -1,0 +1,50 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bpk-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # Puxa o modelo uma única vez; encerra após o download
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: bpk-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["ollama", "pull", "gemma4:e4b"]
+    restart: "no"
+
+  app:
+    build: .
+    container_name: bpk-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Estas variáveis sobrescrevem o .env e apontam para o Ollama local
+      LLM_BASE_URL: http://ollama:11434/v1
+      LLM_API_KEY: ollama
+      OPENROUTER_MODEL: gemma4:e4b
+    volumes:
+      - ./data:/app/data   # user_mapping.json editável sem rebuild
+      - ./logs:/app/logs
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
