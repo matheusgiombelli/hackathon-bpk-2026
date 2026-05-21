@@ -1,6 +1,6 @@
 # Bot Teams + Jira — Biopark Hackathon 2026
 
-Assistente conversacional no Microsoft Teams para gestão de tickets Jira.
+Assistente conversacional no Microsoft Teams para gestão de tickets Jira :D
 
 ## Arquitetura
 
