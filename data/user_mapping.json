@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "teams_email": "jeremiasfullstackdeveloper@gmail.com",
+      "teams_user_id": "29:jeremias",
+      "jira_account_id": "712020:e6cacdff-637c-41b8-a960-49711fe6dc2f",
+      "display_name": "Jeremias Dev Full Stack Developer"
+    },
+    {
+      "teams_email": "User",
+      "teams_user_id": "emulator-user",
+      "jira_account_id": "712020:e6cacdff-637c-41b8-a960-49711fe6dc2f",
+      "display_name": "Jeremias (emulator)"
+    }
+  ]
+}
